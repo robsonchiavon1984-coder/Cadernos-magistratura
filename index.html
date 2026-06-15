@@ -141,9 +141,9 @@ button{font-family:inherit;cursor:pointer}
 .card:hover::after{left:130%}
 
 /* ---------- LAYOUT CADERNOS ---------- */
-.workspace{display:grid;grid-template-columns:236px 322px minmax(0,1fr);gap:14px;max-width:1720px;margin:6px auto 0;align-items:stretch;transition:grid-template-columns .3s ease}
-.workspace.tree-collapsed{grid-template-columns:236px 48px minmax(0,1fr)}
-.workspace.nb-collapsed{grid-template-columns:48px 322px minmax(0,1fr)}
+.workspace{display:grid;grid-template-columns:var(--nb-col,236px) var(--tree-col,322px) minmax(0,1fr);gap:14px;max-width:1720px;margin:6px auto 0;align-items:stretch;transition:grid-template-columns .3s ease}
+.workspace.tree-collapsed{grid-template-columns:var(--nb-col,236px) 48px minmax(0,1fr)}
+.workspace.nb-collapsed{grid-template-columns:48px var(--tree-col,322px) minmax(0,1fr)}
 .workspace.nb-collapsed.tree-collapsed{grid-template-columns:48px 48px minmax(0,1fr)}
 .panel{padding:14px;min-height:76vh;position:relative}
 .panel.rail{padding:6px 4px;overflow:hidden;min-height:76vh}
@@ -163,7 +163,7 @@ button{font-family:inherit;cursor:pointer}
 .nb-item:hover{background:rgba(255,255,255,.4)}
 .nb-item.active{border-color:var(--gold);background:linear-gradient(180deg,rgba(231,196,99,.5),rgba(231,196,99,.18));box-shadow:inset 0 0 0 1px rgba(184,134,11,.25)}
 .nb-swatch{width:13px;height:13px;border-radius:4px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
-.nb-item .nm{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:17px;flex:1;min-width:0;line-height:1.12;word-break:break-word}
+.nb-item .nm{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:var(--nb-font,17px);flex:1;min-width:0;line-height:1.12;word-break:break-word}
 .nb-item .ct{font-size:11px;color:var(--ink-soft);font-weight:700;flex:none;background:rgba(0,0,0,.06);padding:1px 8px;border-radius:999px}
 .nb-acts{display:none;gap:4px;width:100%;justify-content:flex-end;margin-top:3px}
 .nb-item:hover .nb-acts,.nb-item.active .nb-acts{display:flex}
@@ -182,7 +182,7 @@ button{font-family:inherit;cursor:pointer}
 }
 .node:hover{background:rgba(255,255,255,.45)}
 .node.sel{border-color:var(--burgundy);background:linear-gradient(180deg,rgba(154,42,42,.18),rgba(154,42,42,.06));box-shadow:0 2px 8px rgba(123,30,30,.18)}
-.node .tt{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:16px;flex:1;line-height:1.05}
+.node .tt{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:var(--tree-font,16px);flex:1;line-height:1.05}
 .node .mc{font-size:10px;color:var(--ink-soft);font-weight:700}
 .node .acts{display:none;gap:3px}
 .node:hover .acts,.node.sel .acts{display:flex}
@@ -221,7 +221,11 @@ button{font-family:inherit;cursor:pointer}
 .page-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .page-area{overflow:auto;max-height:74vh;border:1px solid var(--glass-brd);border-radius:10px;padding:18px 16px;
   background:repeating-linear-gradient(45deg,#d7c8ad,#d7c8ad 11px,#d1c1a4 11px,#d1c1a4 22px)}
-.sheet-wrap{width:max-content;margin:0 auto}
+.sheet-wrap{width:max-content;margin:0 auto;transform:scale(var(--ed-zoom,1));transform-origin:top center}
+.vp-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12.5px}
+.vp-row span{flex:1.1;color:var(--ink-soft)}
+.vp-row input[type=range]{flex:1.3;min-width:90px}
+.vp-row b{width:48px;text-align:right;color:var(--burgundy);font-variant-numeric:tabular-nums}
 .ruler-h{position:relative;height:22px;background:#f1e8d4;border:1px solid rgba(0,0,0,.18);border-radius:4px;margin:0 auto 8px;user-select:none}
 .ruler-h .rk{position:absolute;top:13px;width:1px;height:7px;background:rgba(0,0,0,.5)}
 .ruler-h .rk.minor{top:16px;height:4px;background:rgba(0,0,0,.3)}
@@ -500,6 +504,7 @@ function normalizeData(d){
   if(!d.tesesChat) d.tesesChat={messages:[]};
   if(!d.sumulasChat) d.sumulasChat={messages:[]};
   if(!d.pomo) d.pomo={day:'',focusToday:0,total:0};
+  d.viewPrefs=Object.assign({nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100}, d.viewPrefs||{});
   d.cats=d.cats||{};
   d.cats.orgaos=d.cats.orgaos||["STF","STJ","TSE","TRF's","TNU","TJSC","OUTRO"];
   d.cats.tipos=d.cats.tipos||['Repercussão Geral','Recurso Repetitivo','Súmula Vinculante','IAC','IRDR','Controle de Constitucionalidade','Tese'];
@@ -535,6 +540,25 @@ function persist(touch=true){
   },150);
   if(drive.connected && settings.autosave!==false){clearTimeout(driveTimer);driveTimer=setTimeout(()=>drive.save(),2500);}
 }
+/* ---------- preferências de exibição (tamanhos) — salvas no material e sincronizadas no Drive ---------- */
+const VP_DEFAULTS={nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100};
+function viewPrefs(){ if(!data.viewPrefs)data.viewPrefs={}; return Object.assign({},VP_DEFAULTS,data.viewPrefs); }
+function applyViewPrefs(){
+  const vp=viewPrefs(), r=document.documentElement.style;
+  r.setProperty('--nb-col',(vp.nbColW)+'px');
+  r.setProperty('--tree-col',(vp.treeColW)+'px');
+  r.setProperty('--nb-font',(vp.nbFont)+'px');
+  r.setProperty('--tree-font',(vp.treeFont)+'px');
+  r.setProperty('--ed-zoom',((vp.edZoom||100)/100));
+}
+function setViewPref(k,v){ if(!data.viewPrefs)data.viewPrefs={}; data.viewPrefs[k]=+v; applyViewPrefs(); persist();
+  const o=document.getElementById('vp_'+k+'_o'); if(o)o.textContent=v+(k==='edZoom'?'%':'px'); }
+function resetViewPrefs(){ data.viewPrefs=Object.assign({},VP_DEFAULTS); applyViewPrefs(); persist(); closeModal(); openSettings(); toast('Tamanhos restaurados ao padrão.','ok'); }
+/* ---------- reordenar (mover ↑/↓) ---------- */
+function _swap(a,i,j){const t=a[i];a[i]=a[j];a[j]=t;}
+function moveNb(id,dir){ const a=data.notebooks; const i=a.findIndex(n=>n.id===id); if(i<0)return; const j=i+ +dir; if(j<0||j>=a.length)return; _swap(a,i,j); persist(); renderNbList(); }
+function _findSiblings(arr,id){ const i=arr.findIndex(n=>n.id===id); if(i>=0)return {arr,i}; for(const n of arr){ if(n.children&&n.children.length){ const r=_findSiblings(n.children,id); if(r)return r; } } return null; }
+function moveNode(nbId,id,dir){ const nb=findNb(nbId)||data.notebooks.find(x=>x.id===nbId); const base=nb?(nb.children||[]):[]; const r=_findSiblings(base,id); if(!r)return; const j=r.i+ +dir; if(j<0||j>=r.arr.length)return; _swap(r.arr,r.i,j); persist(); renderTree(); }
 
 /* ---------- navegação por nós ---------- */
 function findNb(id){return data.notebooks.find(n=>n.id===id)}
@@ -660,6 +684,8 @@ function renderNbList(){
           <span class="nm">${esc(nb.name)}</span>
           <span class="ct">${countNodes(nb)}</span>
           <span class="nb-acts">
+            <button class="mini" title="Mover para cima" onclick="event.stopPropagation();moveNb('${nb.id}',-1)">▲</button>
+            <button class="mini" title="Mover para baixo" onclick="event.stopPropagation();moveNb('${nb.id}',1)">▼</button>
             <button class="mini" title="IA do caderno" onclick="event.stopPropagation();openAI('${nb.id}')">✨ IA</button>
             <button class="mini" title="Renomear" onclick="event.stopPropagation();renameNb('${nb.id}')">✎</button>
             <button class="mini" title="Excluir" onclick="event.stopPropagation();delNb('${nb.id}')">🗑</button>
@@ -695,6 +721,8 @@ function treeLi(nbId,node){
       <span class="tt">${esc(node.name)}</span>
       ${mc?`<span class="mc">${mc}📎</span>`:''}
       <span class="acts">
+        <button class="mini" title="Mover para cima" onclick="event.stopPropagation();moveNode('${nbId}','${node.id}',-1)">▲</button>
+        <button class="mini" title="Mover para baixo" onclick="event.stopPropagation();moveNode('${nbId}','${node.id}',1)">▼</button>
         ${canChild?`<button class="mini" title="Adicionar nível filho" onclick="event.stopPropagation();addChild('${nbId}','${node.id}')">＋</button>`:''}
         <button class="mini" title="Renomear" onclick="event.stopPropagation();renameNode('${nbId}','${node.id}')">✎</button>
         <button class="mini" title="Excluir" onclick="event.stopPropagation();delNode('${nbId}','${node.id}')">🗑</button>
@@ -1981,7 +2009,7 @@ drive.create=async function(content){
   const j=await r.json();return j.id;
 };
 drive.update=async function(id,content){await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{method:'PATCH',headers:{...dHead(),'Content-Type':'application/json'},body:JSON.stringify(content)});};
-drive.payload=()=>({version:data.version,updatedAt:data.updatedAt,provas:data.provas,notebooks:data.notebooks,styles:data.styles,pageSetup:data.pageSetup,teses:data.teses,tesesChat:data.tesesChat,sumulas:data.sumulas,sumulasChat:data.sumulasChat,cats:data.cats,pomo:data.pomo});
+drive.payload=()=>({version:data.version,updatedAt:data.updatedAt,provas:data.provas,notebooks:data.notebooks,styles:data.styles,pageSetup:data.pageSetup,teses:data.teses,tesesChat:data.tesesChat,sumulas:data.sumulas,sumulasChat:data.sumulasChat,cats:data.cats,pomo:data.pomo,viewPrefs:data.viewPrefs});
 
 drive.syncOnConnect=async function(){
   try{
@@ -2000,6 +2028,8 @@ drive.syncOnConnect=async function(){
         if(remote.sumulasChat)data.sumulasChat=remote.sumulasChat;
         if(remote.cats)data.cats=remote.cats;
         if(remote.pomo)data.pomo=remote.pomo;
+        if(remote.viewPrefs)data.viewPrefs=remote.viewPrefs;
+        applyViewPrefs();
         localStorage.setItem('mag_data',JSON.stringify(data));
         stripEditalTags();
         cur.nbId=data.notebooks[0]?.id||null;cur.nodeId=null;
@@ -2388,6 +2418,7 @@ function applyBackup(nd,obj){
   try{localStorage.setItem('mag_data',JSON.stringify(data));}catch(e){}
   if(drive.connected)drive.save();
   applyTheme(settings.theme||'pergaminho');
+  applyViewPrefs();
   cur={nbId:null,nodeId:null,tab:'editor',matFilter:'all'};
 }
 
@@ -2396,6 +2427,7 @@ function applyBackup(nd,obj){
    ============================================================ */
 function openSettings(){
   const origin=location.origin&&location.origin!=='null'?location.origin:'(abra via servidor http)';
+  const vp=viewPrefs();
   openModal(`<h3>⚙ Configurações</h3>
     <p class="sub">Suas credenciais ficam salvas apenas neste navegador (não vão para o Drive).</p>
     <div class="field"><label>Google OAuth Client ID (Drive)</label>
@@ -2419,6 +2451,16 @@ function openSettings(){
       </div></div>
     <div class="field"><label>Tema &amp; cores (plano de fundo)</label>
       <div style="display:flex;flex-wrap:wrap;gap:8px">${Object.keys(THEMES).map(k=>`<button class="btn ghost sm" onclick="setTheme('${k}')" style="${(settings.theme||'pergaminho')===k?'border-color:var(--gold);box-shadow:0 0 0 2px rgba(184,134,11,.4)':''}"><span style="display:inline-block;width:13px;height:13px;border-radius:4px;background:${THEMES[k].swatch};vertical-align:middle;margin-right:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)"></span>${THEMES[k].nome}</button>`).join('')}</div></div>
+    <div class="field"><label>👁 Exibição — tamanhos dos blocos e do editor</label>
+      <div class="vp-row"><span>Largura da coluna de Cadernos</span><input type="range" min="170" max="420" value="${vp.nbColW}" oninput="setViewPref('nbColW',this.value)"><b id="vp_nbColW_o">${vp.nbColW}px</b></div>
+      <div class="vp-row"><span>Tamanho do texto dos Cadernos</span><input type="range" min="13" max="26" value="${vp.nbFont}" oninput="setViewPref('nbFont',this.value)"><b id="vp_nbFont_o">${vp.nbFont}px</b></div>
+      <div class="vp-row"><span>Largura da coluna de Subcadernos</span><input type="range" min="240" max="560" value="${vp.treeColW}" oninput="setViewPref('treeColW',this.value)"><b id="vp_treeColW_o">${vp.treeColW}px</b></div>
+      <div class="vp-row"><span>Tamanho do texto dos Subcadernos</span><input type="range" min="12" max="24" value="${vp.treeFont}" oninput="setViewPref('treeFont',this.value)"><b id="vp_treeFont_o">${vp.treeFont}px</b></div>
+      <div class="vp-row"><span>Zoom do editor de texto</span><input type="range" min="60" max="170" step="5" value="${vp.edZoom}" oninput="setViewPref('edZoom',this.value)"><b id="vp_edZoom_o">${vp.edZoom}%</b></div>
+      <div class="row" style="margin-top:6px"><button class="btn ghost sm" onclick="resetViewPrefs()">↺ Restaurar padrão</button>
+        <button class="btn ghost sm" onclick="closeModal();go('cadernos')">👁 Ver nos Cadernos</button></div>
+      <div class="hintbox" style="margin-top:6px">Arraste e veja ao vivo. Estes tamanhos ficam salvos no seu material e vão para o <b>Google Drive</b> — então abrem <b>iguais em qualquer computador</b>.</div>
+    </div>
     <div class="field"><label>Estrutura / modelos de cadernos</label>
       <div class="row"><button class="btn gold" onclick="closeModal();buildEditalStructure()">📋 Estrutura dos editais (TJSC + TRF6)</button>
         <button class="btn ghost" onclick="closeModal();seedAreas();go('cadernos')">Áreas padrão (vazias)</button></div></div>
@@ -2460,6 +2502,7 @@ function saveSettingsAndConnect(){readCfg();drive.client=null;if(initGoogleClien
 window.addEventListener('load',()=>{setTimeout(()=>{if(settings.clientId)initGoogleClient();},800);});
 stripEditalTags();
 applyTheme(settings.theme||'pergaminho');
+applyViewPrefs();
 go('home');
 </script>
 </body>
