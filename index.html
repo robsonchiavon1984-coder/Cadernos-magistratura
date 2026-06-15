@@ -223,13 +223,19 @@ button{font-family:inherit;cursor:pointer}
 .sw{width:22px;height:22px;border-radius:5px;cursor:pointer;border:1px solid rgba(0,0,0,.2)}
 .sw:hover{transform:scale(1.12)}
 .page-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.page-area{overflow:auto;max-height:84vh;border:1px solid var(--glass-brd);border-radius:10px;padding:18px 16px;
+.page-area{overflow:auto;max-height:var(--ed-h,84vh);border:1px solid var(--glass-brd);border-radius:10px;padding:18px 16px;
   background:repeating-linear-gradient(45deg,#d7c8ad,#d7c8ad 11px,#d1c1a4 11px,#d1c1a4 22px)}
 .sheet-wrap{width:max-content;margin:0 auto;transform:scale(var(--ed-zoom,1));transform-origin:top center}
 .vp-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12.5px}
 .vp-row span{flex:1.1;color:var(--ink-soft)}
 .vp-row input[type=range]{flex:1.3;min-width:90px}
 .vp-row b{width:48px;text-align:right;color:var(--burgundy);font-variant-numeric:tabular-nums}
+.ed-resizer{height:16px;cursor:row-resize;display:flex;align-items:center;justify-content:center;margin-top:4px;touch-action:none}
+.ed-resizer::after{content:'';width:90px;height:4px;border-radius:3px;background:rgba(123,30,30,.22);transition:.15s}
+.ed-resizer:hover::after{background:var(--gold);width:130px}
+#pDetail.maximized{position:fixed;inset:12px;z-index:200;min-height:0;background:var(--glass-bg-strong);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--glass-brd);border-radius:14px;box-shadow:var(--glass-shadow);overflow:auto;padding:16px 18px}
+#pDetail.maximized .page-area{max-height:calc(100vh - 240px)}
+.ed-backdrop{position:fixed;inset:0;background:rgba(20,12,6,.30);z-index:199}
 .ruler-h{position:relative;height:22px;background:#f1e8d4;border:1px solid rgba(0,0,0,.18);border-radius:4px;margin:0 auto 8px;user-select:none}
 .ruler-h .rk{position:absolute;top:13px;width:1px;height:7px;background:rgba(0,0,0,.5)}
 .ruler-h .rk.minor{top:16px;height:4px;background:rgba(0,0,0,.3)}
@@ -508,7 +514,7 @@ function normalizeData(d){
   if(!d.tesesChat) d.tesesChat={messages:[]};
   if(!d.sumulasChat) d.sumulasChat={messages:[]};
   if(!d.pomo) d.pomo={day:'',focusToday:0,total:0};
-  d.viewPrefs=Object.assign({nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100}, d.viewPrefs||{});
+  d.viewPrefs=Object.assign({nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100,edH:84}, d.viewPrefs||{});
   d.cats=d.cats||{};
   d.cats.orgaos=d.cats.orgaos||["STF","STJ","TSE","TRF's","TNU","TJSC","OUTRO"];
   d.cats.tipos=d.cats.tipos||['Repercussão Geral','Recurso Repetitivo','Súmula Vinculante','IAC','IRDR','Controle de Constitucionalidade','Tese'];
@@ -545,7 +551,7 @@ function persist(touch=true){
   if(drive.connected && settings.autosave!==false){clearTimeout(driveTimer);driveTimer=setTimeout(()=>drive.save(),2500);}
 }
 /* ---------- preferências de exibição (tamanhos) — salvas no material e sincronizadas no Drive ---------- */
-const VP_DEFAULTS={nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100};
+const VP_DEFAULTS={nbColW:236,nbFont:17,treeColW:322,treeFont:16,edZoom:100,edH:84};
 function viewPrefs(){ if(!data.viewPrefs)data.viewPrefs={}; return Object.assign({},VP_DEFAULTS,data.viewPrefs); }
 function applyViewPrefs(){
   const vp=viewPrefs(), r=document.documentElement.style;
@@ -554,9 +560,10 @@ function applyViewPrefs(){
   r.setProperty('--nb-font',(vp.nbFont)+'px');
   r.setProperty('--tree-font',(vp.treeFont)+'px');
   r.setProperty('--ed-zoom',((vp.edZoom||100)/100));
+  r.setProperty('--ed-h',((vp.edH||84))+'vh');
 }
 function setViewPref(k,v){ if(!data.viewPrefs)data.viewPrefs={}; data.viewPrefs[k]=+v; applyViewPrefs(); persist();
-  const o=document.getElementById('vp_'+k+'_o'); if(o)o.textContent=v+(k==='edZoom'?'%':'px'); }
+  const o=document.getElementById('vp_'+k+'_o'); if(o)o.textContent=v+(k==='edZoom'?'%':(k==='edH'?'vh':'px')); }
 function resetViewPrefs(){ data.viewPrefs=Object.assign({},VP_DEFAULTS); applyViewPrefs(); persist(); closeModal(); openSettings(); toast('Tamanhos restaurados ao padrão.','ok'); }
 /* ---------- reordenar (mover ↑/↓) ---------- */
 function _swap(a,i,j){const t=a[i];a[i]=a[j];a[j]=t;}
@@ -597,6 +604,7 @@ function countNodes(nb){let c=0;walk(nb.children||[],()=>c++);return c;}
    ROTEAMENTO DE TELAS
    ============================================================ */
 function go(screen,arg){
+  if(cur.edMax){cur.edMax=false;const _bd=document.getElementById('edBackdrop');if(_bd)_bd.remove();document.removeEventListener('keydown',_edEsc);}
   cur.screen=screen;
   const v=$('#view');
   if(screen==='home') v.innerHTML=renderHome();
@@ -776,6 +784,7 @@ function renderDetail(){
     </div>
     <div id="tabBody" style="flex:1;display:flex;flex-direction:column"></div>`;
   renderTabBody();
+  el.classList.toggle('maximized',!!cur.edMax);
 }
 function setTab(t){flushEditor();cur.tab=t;renderTabBody();
   document.querySelectorAll('#pDetail .tab').forEach(x=>x.classList.remove('active'));
@@ -873,6 +882,7 @@ function editorHTML(){
     <button class="btn ghost sm" onclick="openPageSetup()">📐 Página &amp; margens</button>
     <span class="chip">régua em cm · arraste as margens ▾</span>
     <div style="flex:1"></div>
+    <button class="btn ghost sm" id="edMaxBtn" onclick="toggleEditorMax()" title="Expandir/recolher a janela de edição">${cur.edMax?'⤢ Restaurar':'⛶ Expandir'}</button>
     <button class="btn gold sm" onclick="exportPDF()" title="Exportar como PDF (A4)">⤓ PDF</button>
     <button class="btn gold sm" onclick="exportWord()" title="Exportar como Word (.doc)">⤓ Word</button>
   </div>
@@ -883,6 +893,7 @@ function editorHTML(){
       <div class="page editor-page" id="editor" contenteditable="true" data-ph="Escreva aqui a doutrina deste tópico… use a barra como no Word."></div>
     </div>
   </div>
+  <div class="ed-resizer" id="edResizer" title="Arraste ↕ para aumentar a janela de edição"></div>
   <div class="save-hint" id="saveHint">Salvamento automático ativo.</div>`;
 }
 function initEditor(){
@@ -894,7 +905,31 @@ function initEditor(){
   let t=null;
   ed.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>{f.node.content=ed.innerHTML;persist();const sh=$('#saveHint');if(sh)sh.textContent='Salvo ✓ '+new Date().toLocaleTimeString('pt-BR');if(tocVisible)buildToc();},400);});
   applyPageSetup();
+  const er=document.getElementById('edResizer');
+  if(er&&!er._wired){ er._wired=true;
+    er.addEventListener('pointerdown',function(e){
+      e.preventDefault();
+      const pa=document.getElementById('pageArea'); if(!pa)return;
+      const startY=e.clientY, startH=pa.getBoundingClientRect().height;
+      try{er.setPointerCapture(e.pointerId);}catch(_){}
+      document.body.style.cursor='row-resize';
+      function move(ev){ let h=startH+(ev.clientY-startY); let vh=Math.round(h/window.innerHeight*100); vh=Math.max(30,Math.min(96,vh)); if(!data.viewPrefs)data.viewPrefs={}; data.viewPrefs.edH=vh; document.documentElement.style.setProperty('--ed-h',vh+'vh'); }
+      function up(){ document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); document.body.style.cursor=''; persist(); }
+      document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+    });
+  }
 }
+/* expandir a janela de edição (tela cheia) */
+function toggleEditorMax(){
+  const el=document.getElementById('pDetail'); if(!el)return;
+  cur.edMax=!cur.edMax;
+  el.classList.toggle('maximized',cur.edMax);
+  let bd=document.getElementById('edBackdrop');
+  if(cur.edMax){ if(!bd){bd=document.createElement('div');bd.id='edBackdrop';bd.className='ed-backdrop';bd.onclick=toggleEditorMax;document.body.appendChild(bd);} document.addEventListener('keydown',_edEsc); }
+  else{ if(bd)bd.remove(); document.removeEventListener('keydown',_edEsc); }
+  const b=document.getElementById('edMaxBtn'); if(b)b.textContent=cur.edMax?'⤢ Restaurar':'⛶ Expandir';
+}
+function _edEsc(e){ if(e.key==='Escape'&&cur.edMax)toggleEditorMax(); }
 /* aplica tamanho A4 + margens (cm) à folha e desenha a régua */
 function applyPageSetup(){
   const ps=data.pageSetup, sz=PAGE_SIZES[ps.size]||PAGE_SIZES.A4;
@@ -2480,6 +2515,7 @@ function openSettings(){
       <div class="vp-row"><span>Largura da coluna de Subcadernos</span><input type="range" min="240" max="560" value="${vp.treeColW}" oninput="setViewPref('treeColW',this.value)"><b id="vp_treeColW_o">${vp.treeColW}px</b></div>
       <div class="vp-row"><span>Tamanho do texto dos Subcadernos</span><input type="range" min="12" max="24" value="${vp.treeFont}" oninput="setViewPref('treeFont',this.value)"><b id="vp_treeFont_o">${vp.treeFont}px</b></div>
       <div class="vp-row"><span>Zoom do editor de texto</span><input type="range" min="60" max="170" step="5" value="${vp.edZoom}" oninput="setViewPref('edZoom',this.value)"><b id="vp_edZoom_o">${vp.edZoom}%</b></div>
+      <div class="vp-row"><span>Altura da janela do editor</span><input type="range" min="40" max="96" step="2" value="${vp.edH}" oninput="setViewPref('edH',this.value)"><b id="vp_edH_o">${vp.edH}vh</b></div>
       <div class="row" style="margin-top:6px"><button class="btn ghost sm" onclick="resetViewPrefs()">↺ Restaurar padrão</button>
         <button class="btn ghost sm" onclick="closeModal();go('cadernos')">👁 Ver nos Cadernos</button></div>
       <div class="hintbox" style="margin-top:6px">Dica: você também pode <b>arrastar a divisória</b> (barra dourada) entre os quadros direto na tela dos Cadernos. Tudo fica salvo e vai para o <b>Google Drive</b> — abre <b>igual em qualquer computador</b>.</div>
