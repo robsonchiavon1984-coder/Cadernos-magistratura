@@ -141,10 +141,14 @@ button{font-family:inherit;cursor:pointer}
 .card:hover::after{left:130%}
 
 /* ---------- LAYOUT CADERNOS ---------- */
-.workspace{display:grid;grid-template-columns:var(--nb-col,236px) var(--tree-col,322px) minmax(0,1fr);gap:14px;max-width:1720px;margin:6px auto 0;align-items:stretch;transition:grid-template-columns .3s ease}
+.workspace{display:grid;grid-template-columns:var(--nb-col,236px) var(--tree-col,322px) minmax(0,1fr);gap:14px;max-width:min(2400px,98vw);margin:6px auto 0;align-items:stretch;transition:grid-template-columns .3s ease}
 .workspace.tree-collapsed{grid-template-columns:var(--nb-col,236px) 48px minmax(0,1fr)}
 .workspace.nb-collapsed{grid-template-columns:48px var(--tree-col,322px) minmax(0,1fr)}
 .workspace.nb-collapsed.tree-collapsed{grid-template-columns:48px 48px minmax(0,1fr)}
+.workspace.resizing{transition:none;user-select:none}
+.col-resizer{position:absolute;top:0;right:-7px;width:12px;height:100%;cursor:col-resize;z-index:8;touch-action:none}
+.col-resizer::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:4px;height:54px;border-radius:3px;background:rgba(123,30,30,.22);transition:.15s}
+.col-resizer:hover::after,.workspace.resizing .col-resizer::after{background:var(--gold);height:88px}
 .panel{padding:14px;min-height:76vh;position:relative}
 .panel.rail{padding:6px 4px;overflow:hidden;min-height:76vh}
 .rail-open{writing-mode:vertical-rl;transform:rotate(180deg);height:100%;width:100%;border:none;background:transparent;
@@ -155,7 +159,7 @@ button{font-family:inherit;cursor:pointer}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 
 /* sidebar cadernos */
-.nb-list{display:flex;flex-direction:column;gap:7px;max-height:64vh;overflow:auto;padding-right:4px}
+.nb-list{display:flex;flex-direction:column;gap:7px;max-height:74vh;overflow:auto;padding-right:4px}
 .nb-item{
   display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 11px;border-radius:12px;cursor:pointer;
   border:1px solid transparent;transition:.15s;background:rgba(255,255,255,.18);position:relative
@@ -169,7 +173,7 @@ button{font-family:inherit;cursor:pointer}
 .nb-item:hover .nb-acts,.nb-item.active .nb-acts{display:flex}
 
 /* organograma */
-.tree{font-size:14px;overflow:auto;max-height:64vh;padding:4px 2px 10px}
+.tree{font-size:14px;overflow:auto;max-height:74vh;padding:4px 2px 10px}
 .tree ul{list-style:none;margin:0;padding-left:26px;position:relative}
 .tree > ul{padding-left:4px}
 .tree li{position:relative;padding:5px 0}
@@ -219,7 +223,7 @@ button{font-family:inherit;cursor:pointer}
 .sw{width:22px;height:22px;border-radius:5px;cursor:pointer;border:1px solid rgba(0,0,0,.2)}
 .sw:hover{transform:scale(1.12)}
 .page-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.page-area{overflow:auto;max-height:74vh;border:1px solid var(--glass-brd);border-radius:10px;padding:18px 16px;
+.page-area{overflow:auto;max-height:84vh;border:1px solid var(--glass-brd);border-radius:10px;padding:18px 16px;
   background:repeating-linear-gradient(45deg,#d7c8ad,#d7c8ad 11px,#d1c1a4 11px,#d1c1a4 22px)}
 .sheet-wrap{width:max-content;margin:0 auto;transform:scale(var(--ed-zoom,1));transform-origin:top center}
 .vp-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12.5px}
@@ -559,6 +563,23 @@ function _swap(a,i,j){const t=a[i];a[i]=a[j];a[j]=t;}
 function moveNb(id,dir){ const a=data.notebooks; const i=a.findIndex(n=>n.id===id); if(i<0)return; const j=i+ +dir; if(j<0||j>=a.length)return; _swap(a,i,j); persist(); renderNbList(); }
 function _findSiblings(arr,id){ const i=arr.findIndex(n=>n.id===id); if(i>=0)return {arr,i}; for(const n of arr){ if(n.children&&n.children.length){ const r=_findSiblings(n.children,id); if(r)return r; } } return null; }
 function moveNode(nbId,id,dir){ const nb=findNb(nbId)||data.notebooks.find(x=>x.id===nbId); const base=nb?(nb.children||[]):[]; const r=_findSiblings(base,id); if(!r)return; const j=r.i+ +dir; if(j<0||j>=r.arr.length)return; _swap(r.arr,r.i,j); persist(); renderTree(); }
+/* divisória arrastável: redimensiona o quadro direto na janela e salva (sincroniza no Drive) */
+function addResizer(el,key,min,max){
+  if(!el||el.classList.contains('rail'))return;
+  if(el.querySelector(':scope > .col-resizer'))return;
+  const cssVar = key==='nbColW' ? '--nb-col' : '--tree-col';
+  const h=document.createElement('div'); h.className='col-resizer'; h.title='Arraste ↔ para aumentar ou diminuir este quadro';
+  el.appendChild(h);
+  h.addEventListener('pointerdown',function(e){
+    e.preventDefault(); e.stopPropagation();
+    const ws=document.getElementById('ws'); if(ws)ws.classList.add('resizing');
+    const startX=e.clientX, startW=viewPrefs()[key];
+    try{h.setPointerCapture(e.pointerId);}catch(_){}
+    function move(ev){ let w=Math.round(startW+(ev.clientX-startX)); w=Math.max(min,Math.min(max,w)); if(!data.viewPrefs)data.viewPrefs={}; data.viewPrefs[key]=w; document.documentElement.style.setProperty(cssVar,w+'px'); }
+    function up(){ document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); if(ws)ws.classList.remove('resizing'); persist(); }
+    document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+  });
+}
 
 /* ---------- navegação por nós ---------- */
 function findNb(id){return data.notebooks.find(n=>n.id===id)}
@@ -693,6 +714,7 @@ function renderNbList(){
         </div>`).join('')
       :`<div class="empty">Nenhum caderno ainda.<br>Use “＋ Novo” ou monte a estrutura dos editais em ⚙ Configurações.</div>`}
     </div>`;
+  addResizer($('#pNb'),'nbColW',160,680);
 }
 
 function renderTree(){
@@ -710,6 +732,7 @@ function renderTree(){
       </div></div>
     <div class="tree">${nb.children&&nb.children.length?`<ul>${nb.children.map(c=>treeLi(nb.id,c)).join('')}</ul>`
       :`<div class="empty">Organograma vazio.<br>Crie um <b>subcaderno</b> para começar a estruturar a matéria.</div>`}</div>`;
+  addResizer($('#pTree'),'treeColW',220,1000);
 }
 function treeLi(nbId,node){
   const depth=nodeDepth(nbId,node.id);
@@ -2459,7 +2482,7 @@ function openSettings(){
       <div class="vp-row"><span>Zoom do editor de texto</span><input type="range" min="60" max="170" step="5" value="${vp.edZoom}" oninput="setViewPref('edZoom',this.value)"><b id="vp_edZoom_o">${vp.edZoom}%</b></div>
       <div class="row" style="margin-top:6px"><button class="btn ghost sm" onclick="resetViewPrefs()">↺ Restaurar padrão</button>
         <button class="btn ghost sm" onclick="closeModal();go('cadernos')">👁 Ver nos Cadernos</button></div>
-      <div class="hintbox" style="margin-top:6px">Arraste e veja ao vivo. Estes tamanhos ficam salvos no seu material e vão para o <b>Google Drive</b> — então abrem <b>iguais em qualquer computador</b>.</div>
+      <div class="hintbox" style="margin-top:6px">Dica: você também pode <b>arrastar a divisória</b> (barra dourada) entre os quadros direto na tela dos Cadernos. Tudo fica salvo e vai para o <b>Google Drive</b> — abre <b>igual em qualquer computador</b>.</div>
     </div>
     <div class="field"><label>Estrutura / modelos de cadernos</label>
       <div class="row"><button class="btn gold" onclick="closeModal();buildEditalStructure()">📋 Estrutura dos editais (TJSC + TRF6)</button>
